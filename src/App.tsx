@@ -5,6 +5,7 @@ import AlertList from '@/pages/AlertList';
 import CaseDetail from '@/pages/CaseDetail';
 import Strategy from '@/pages/Strategy';
 import Reports from '@/pages/Reports';
+import AuditCenter from '@/pages/AuditCenter';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/cases/:id" element={<CaseDetail />} />
           <Route path="/strategy" element={<Strategy />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/audit" element={<AuditCenter />} />
         </Route>
       </Routes>
     </Router>

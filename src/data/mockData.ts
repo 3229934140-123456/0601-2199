@@ -9,6 +9,7 @@ import type {
   RegionData,
   VerifyRecord,
   OperationLog,
+  AuditLog,
 } from '@/types';
 
 export const mockUser: User = {
@@ -94,6 +95,7 @@ function generateAlerts(): Alert[] {
       cardNo: `6222****${Math.floor(1000 + Math.random() * 9000)}`,
       deviceInfo: `DEV-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
       verifyRecords: [],
+      reviewRecords: [],
       operationLogs: [
         {
           id: `op_${i}_001`,
@@ -299,3 +301,74 @@ export const mockReports: Report[] = [
     })),
   },
 ];
+
+export function generateAuditLogs(alerts: Alert[], rules: RiskRule[], lists: BlackWhiteItem[]): AuditLog[] {
+  const logs: AuditLog[] = [];
+  const now = new Date();
+
+  alerts.slice(0, 5).forEach((alert, idx) => {
+    logs.push({
+      id: `audit_${idx + 1}`,
+      action: 'alert_created',
+      targetType: 'alert',
+      targetId: alert.id,
+      targetName: alert.merchantName,
+      detail: `命中 ${alert.hitRules.length} 条风控规则触发系统自动预警，金额 ¥${alert.amount.toLocaleString()}`,
+      operator: 'SYSTEM',
+      createdAt: new Date(now.getTime() - (idx + 1) * 3600000).toISOString(),
+    });
+  });
+
+  logs.push({
+    id: 'audit_6',
+    action: 'assign',
+    targetType: 'alert',
+    targetId: alerts[0].id,
+    targetName: alerts[0].merchantName,
+    detail: '将预警分派给 李主管 处理',
+    operator: '张风控',
+    createdAt: new Date(now.getTime() - 1800000).toISOString(),
+  });
+
+  logs.push({
+    id: 'audit_7',
+    action: 'rule_threshold_update',
+    targetType: 'rule',
+    targetId: rules[0].id,
+    targetName: rules[0].name,
+    detail: `阈值从 ${rules[0].minThreshold} 调整为 ${rules[0].currentThreshold} ${rules[0].unit}`,
+    operator: '王策略',
+    createdAt: new Date(now.getTime() - 7200000).toISOString(),
+    metadata: { oldThreshold: rules[0].minThreshold, newThreshold: rules[0].currentThreshold },
+  });
+
+  if (lists.length > 0) {
+    logs.push({
+      id: 'audit_8',
+      action: 'list_add',
+      targetType: 'list',
+      targetId: lists[0].id,
+      targetName: lists[0].value,
+      detail: `新增${lists[0].type === 'black' ? '黑名单' : '白名单'}记录：${lists[0].value}，原因：${lists[0].reason}`,
+      operator: '李主管',
+      createdAt: new Date(now.getTime() - 10800000).toISOString(),
+      metadata: { listType: lists[0].type, category: lists[0].category },
+    });
+  }
+
+  logs.push({
+    id: 'audit_9',
+    action: 'rule_toggle',
+    targetType: 'rule',
+    targetId: rules[2].id,
+    targetName: rules[2].name,
+    detail: `规则已${rules[2].enabled ? '启用' : '停用'}`,
+    operator: '王策略',
+    createdAt: new Date(now.getTime() - 14400000).toISOString(),
+    metadata: { enabled: rules[2].enabled },
+  });
+
+  return logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export const mockAuditLogs: AuditLog[] = generateAuditLogs(mockAlerts, mockRules, mockBlackWhiteList);

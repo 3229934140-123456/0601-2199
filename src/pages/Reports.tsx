@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   FileBarChart,
   Calendar,
@@ -12,13 +12,18 @@ import {
   Clock,
   X,
   Loader2,
+  Filter,
+  MapPin,
+  AlertOctagon,
+  Play,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { useAppStore } from '@/store/useAppStore';
-import type { Report, RiskLevel } from '@/types';
+import type { Report, RiskLevel, CustomReportConfig } from '@/types';
 import { formatCurrency, formatNumber, formatDate, formatDateTime, getRiskLevelConfig } from '@/utils/formatters';
 import { exportReportToPDF, exportReportToExcel } from '@/utils/export';
 import PageHeader from '@/components/common/PageHeader';
+import Select from '@/components/common/Select';
 
 const COLORS: Record<RiskLevel, string> = {
   critical: '#FF4D4F',
@@ -34,13 +39,83 @@ const LABELS: Record<RiskLevel, string> = {
   low: '低风险',
 };
 
+const regionOptions = [
+  { value: '', label: '全部地区' },
+  { value: '北京', label: '北京' },
+  { value: '上海', label: '上海' },
+  { value: '广东', label: '广东' },
+  { value: '浙江', label: '浙江' },
+  { value: '江苏', label: '江苏' },
+  { value: '四川', label: '四川' },
+  { value: '湖北', label: '湖北' },
+  { value: '福建', label: '福建' },
+  { value: '山东', label: '山东' },
+  { value: '河南', label: '河南' },
+];
+
+const riskLevelOptions: { value: RiskLevel; label: string }[] = [
+  { value: 'critical', label: '极高风险' },
+  { value: 'high', label: '高风险' },
+  { value: 'medium', label: '中风险' },
+  { value: 'low', label: '低风险' },
+];
+
 export default function Reports() {
-  const { reports } = useAppStore();
-  const [reportFilter, setReportFilter] = useState<'all' | 'daily' | 'weekly'>('all');
+  const { reports, generateCustomReport, currentUser } = useAppStore();
+  const [reportFilter, setReportFilter] = useState<'all' | 'daily' | 'weekly' | 'custom'>('all');
+  const [activeTab, setActiveTab] = useState<'list' | 'custom'>('list');
   const [previewReport, setPreviewReport] = useState<Report | null>(null);
   const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
+  const [generating, setGenerating] = useState(false);
 
-  const filteredReports = reportFilter === 'all' ? reports : reports.filter(r => r.type === reportFilter);
+  const [customConfig, setCustomConfig] = useState<CustomReportConfig>({
+    dateFrom: '',
+    dateTo: '',
+    riskLevels: [],
+    regions: [],
+  });
+
+  const filteredReports = useMemo(() => {
+    if (reportFilter === 'all') return reports;
+    return reports.filter(r => r.type === reportFilter);
+  }, [reports, reportFilter]);
+
+  const customReports = useMemo(() => {
+    return reports.filter((r: Report) => r.type === 'custom');
+  }, [reports]);
+
+  const handleRiskLevelToggle = (level: RiskLevel) => {
+    setCustomConfig(prev => {
+      const next = prev.riskLevels?.includes(level)
+        ? prev.riskLevels.filter(l => l !== level)
+        : [...(prev.riskLevels || []), level];
+      return { ...prev, riskLevels: next.length > 0 ? next : undefined };
+    });
+  };
+
+  const handleRegionToggle = (region: string) => {
+    setCustomConfig(prev => {
+      const next = prev.regions?.includes(region)
+        ? prev.regions.filter(r => r !== region)
+        : [...(prev.regions || []), region];
+      return { ...prev, regions: next.length > 0 ? next : undefined };
+    });
+  };
+
+  const canGenerate = customConfig.dateFrom && customConfig.dateTo;
+
+  const handleGenerateReport = async () => {
+    if (!canGenerate) return;
+    setGenerating(true);
+    try {
+      const report = generateCustomReport(customConfig, currentUser.name);
+      setPreviewReport(report);
+      setActiveTab('list');
+      setReportFilter('custom');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleExport = async (report: Report, format: 'pdf' | 'excel') => {
     setExporting(format);
@@ -77,7 +152,7 @@ export default function Reports() {
             <div>
               <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
                 <FileBarChart className="w-6 h-6 text-accent-primary" />
-                {previewReport.type === 'daily' ? '日报' : '周报'}详情
+                {previewReport.type === 'daily' ? '日报' : previewReport.type === 'weekly' ? '周报' : '自定义报告'}详情
               </h1>
               <p className="text-sm text-text-secondary mt-1">报告周期: {previewReport.period}</p>
             </div>
@@ -105,10 +180,24 @@ export default function Reports() {
         <div id="report-content" className="card p-8 mb-4">
           <div className="text-center border-b border-border-primary pb-6 mb-6">
             <h2 className="text-2xl font-bold text-text-primary mb-2">
-              支付机构风险控制{previewReport.type === 'daily' ? '日' : '周'}报告
+              支付机构风险控制{previewReport.type === 'daily' ? '日' : previewReport.type === 'weekly' ? '周' : '自定义'}报告
             </h2>
             <p className="text-text-secondary">报告期：{previewReport.period}</p>
             <p className="text-xs text-text-muted mt-1">生成时间：{formatDateTime(previewReport.generatedAt)}</p>
+            {previewReport.config && (
+              <div className="mt-2 flex items-center justify-center gap-4 flex-wrap">
+                {previewReport.config.riskLevels && previewReport.config.riskLevels.length > 0 && (
+                  <span className="text-xs text-text-muted">
+                    风险等级: {previewReport.config.riskLevels.map(l => getRiskLevelConfig(l).label).join('、')}
+                  </span>
+                )}
+                {previewReport.config.regions && previewReport.config.regions.length > 0 && (
+                  <span className="text-xs text-text-muted">
+                    地区: {previewReport.config.regions.join('、')}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
@@ -245,91 +334,236 @@ export default function Reports() {
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setReportFilter('all')}
-              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                reportFilter === 'all' ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:text-text-primary'
+              onClick={() => setActiveTab('list')}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                activeTab === 'list' ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:text-text-primary'
               }`}
             >
-              全部
+              报告列表
             </button>
             <button
-              onClick={() => setReportFilter('daily')}
-              className={`px-3 py-1.5 text-sm rounded-md flex items-center gap-1.5 transition-colors ${
-                reportFilter === 'daily' ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:text-text-primary'
+              onClick={() => setActiveTab('custom')}
+              className={`px-4 py-1.5 text-sm rounded-md flex items-center gap-1.5 transition-colors ${
+                activeTab === 'custom' ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:text-text-primary'
               }`}
             >
-              <Calendar className="w-4 h-4" /> 日报
-            </button>
-            <button
-              onClick={() => setReportFilter('weekly')}
-              className={`px-3 py-1.5 text-sm rounded-md flex items-center gap-1.5 transition-colors ${
-                reportFilter === 'weekly' ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4" /> 周报
+              <Filter className="w-4 h-4" /> 自定义报告
             </button>
           </div>
         </div>
 
-        <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredReports.map(report => (
-            <div
-              key={report.id}
-              className="group relative p-5 rounded-lg bg-bg-secondary border border-border-primary hover:border-accent-primary/50 transition-all hover:shadow-glow cursor-pointer"
-              onClick={() => setPreviewReport(report)}
-            >
-              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
-                <button
-                  onClick={e => { e.stopPropagation(); setPreviewReport(report); }}
-                  className="p-1.5 rounded bg-bg-hover text-text-secondary hover:text-accent-primary transition-colors"
-                  title="查看"
+        {activeTab === 'list' && (
+          <>
+            <div className="px-5 pt-4 flex items-center gap-2 border-b border-border-primary pb-4">
+              <button
+                onClick={() => setReportFilter('all')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  reportFilter === 'all' ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                全部
+              </button>
+              <button
+                onClick={() => setReportFilter('daily')}
+                className={`px-3 py-1.5 text-sm rounded-md flex items-center gap-1.5 transition-colors ${
+                  reportFilter === 'daily' ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <Calendar className="w-4 h-4" /> 日报
+              </button>
+              <button
+                onClick={() => setReportFilter('weekly')}
+                className={`px-3 py-1.5 text-sm rounded-md flex items-center gap-1.5 transition-colors ${
+                  reportFilter === 'weekly' ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" /> 周报
+              </button>
+              <button
+                onClick={() => setReportFilter('custom')}
+                className={`px-3 py-1.5 text-sm rounded-md flex items-center gap-1.5 transition-colors ${
+                  reportFilter === 'custom' ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <Filter className="w-4 h-4" /> 自定义
+              </button>
+            </div>
+
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredReports.map(report => (
+                <div
+                  key={report.id}
+                  className="group relative p-5 rounded-lg bg-bg-secondary border border-border-primary hover:border-accent-primary/50 transition-all hover:shadow-glow cursor-pointer"
+                  onClick={() => setPreviewReport(report)}
                 >
-                  <Eye className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={e => { e.stopPropagation(); handleExport(report, 'pdf'); }}
-                  className="p-1.5 rounded bg-bg-hover text-text-secondary hover:text-accent-primary transition-colors"
-                  title="导出PDF"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                </button>
-              </div>
+                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+                    <button
+                      onClick={e => { e.stopPropagation(); setPreviewReport(report); }}
+                      className="p-1.5 rounded bg-bg-hover text-text-secondary hover:text-accent-primary transition-colors"
+                      title="查看"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); handleExport(report, 'pdf'); }}
+                      className="p-1.5 rounded bg-bg-hover text-text-secondary hover:text-accent-primary transition-colors"
+                      title="导出PDF"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
 
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-accent-primary/30 to-accent-secondary/20 flex items-center justify-center mb-4">
-                <FileBarChart className="w-6 h-6 text-accent-primary" />
-              </div>
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-accent-primary/30 to-accent-secondary/20 flex items-center justify-center mb-4">
+                    <FileBarChart className="w-6 h-6 text-accent-primary" />
+                  </div>
 
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`tag text-[10px] ${
-                  report.type === 'daily' ? 'bg-accent-primary/15 text-accent-primary' : 'bg-risk-low/15 text-risk-low'
-                }`}>
-                  {report.type === 'daily' ? '日报' : '周报'}
-                </span>
-                <span className="text-xs text-text-muted">{report.period}</span>
-              </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`tag text-[10px] ${
+                      report.type === 'daily' ? 'bg-accent-primary/15 text-accent-primary' :
+                      report.type === 'weekly' ? 'bg-risk-low/15 text-risk-low' :
+                      'bg-accent-secondary/15 text-accent-secondary'
+                    }`}>
+                      {report.type === 'daily' ? '日报' : report.type === 'weekly' ? '周报' : '自定义'}
+                    </span>
+                    <span className="text-xs text-text-muted">{report.period}</span>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-border-primary">
-                <div>
-                  <div className="text-xs text-text-muted">预警数</div>
-                  <div className="font-mono text-lg font-bold text-text-primary">{formatNumber(report.summary.totalAlerts)}</div>
+                  <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-border-primary">
+                    <div>
+                      <div className="text-xs text-text-muted">预警数</div>
+                      <div className="font-mono text-lg font-bold text-text-primary">{formatNumber(report.summary.totalAlerts)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-text-muted">确认风险</div>
+                      <div className="font-mono text-lg font-bold text-risk-critical">{formatNumber(report.summary.confirmedRisks)}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-xs text-text-muted">
+                    生成时间: {formatDate(report.generatedAt)}
+                  </div>
                 </div>
-                <div>
-                  <div className="text-xs text-text-muted">确认风险</div>
-                  <div className="font-mono text-lg font-bold text-risk-critical">{formatNumber(report.summary.confirmedRisks)}</div>
+              ))}
+            </div>
+
+            {filteredReports.length === 0 && (
+              <div className="py-16 text-center text-text-muted">
+                <FileBarChart className="w-12 h-12 mx-auto mb-3 opacity-40" />
+                <p className="text-sm">暂无符合条件的报告</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'custom' && (
+          <div className="p-5">
+            <div className="max-w-3xl mx-auto">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-accent-primary/30 to-accent-secondary/20 flex items-center justify-center mx-auto mb-4">
+                  <Filter className="w-8 h-8 text-accent-primary" />
                 </div>
+                <h3 className="text-lg font-semibold text-text-primary mb-1">生成自定义报告</h3>
+                <p className="text-sm text-text-secondary">选择时间范围、风险等级和地区，生成专属分析报告</p>
               </div>
 
-              <div className="mt-3 text-xs text-text-muted">
-                生成时间: {formatDate(report.generatedAt)}
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1.5">开始日期 *</label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                      <input
+                        type="date"
+                        value={customConfig.dateFrom}
+                        onChange={(e) => setCustomConfig({ ...customConfig, dateFrom: e.target.value })}
+                        className="input-base pl-9"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1.5">结束日期 *</label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                      <input
+                        type="date"
+                        value={customConfig.dateTo}
+                        onChange={(e) => setCustomConfig({ ...customConfig, dateTo: e.target.value })}
+                        className="input-base pl-9"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-text-secondary mb-2 flex items-center gap-1.5">
+                    <AlertOctagon className="w-4 h-4 text-risk-critical" />
+                    风险等级（可多选，不选则包含全部）
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {riskLevelOptions.map((opt) => {
+                      const cfg = getRiskLevelConfig(opt.value);
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => handleRiskLevelToggle(opt.value)}
+                          className={`px-4 py-2 text-sm rounded-md border transition-colors ${
+                            customConfig.riskLevels?.includes(opt.value)
+                              ? `${cfg.bgColor} ${cfg.color} ${cfg.borderColor} border`
+                              : 'bg-bg-secondary border-border-primary text-text-secondary hover:border-accent-primary/30'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-text-secondary mb-2 flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-accent-secondary" />
+                    地区（可多选，不选则包含全部）
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {regionOptions.filter(r => r.value !== '').map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleRegionToggle(opt.value)}
+                        className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                          customConfig.regions?.includes(opt.value)
+                            ? 'bg-accent-secondary/15 text-accent-secondary border-accent-secondary/50'
+                            : 'bg-bg-secondary border-border-primary text-text-secondary hover:border-accent-primary/30'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border-primary">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-text-muted">
+                      {customReports.length > 0 && (
+                        <span>已生成 {customReports.length} 份自定义报告</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleGenerateReport}
+                      disabled={!canGenerate || generating}
+                      className="btn-primary flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {generating ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Play className="w-4 h-4" />
+                      )}
+                      {generating ? '生成中...' : '生成报告'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
-
-        {filteredReports.length === 0 && (
-          <div className="py-16 text-center text-text-muted">
-            <FileBarChart className="w-12 h-12 mx-auto mb-3 opacity-40" />
-            <p className="text-sm">暂无符合条件的报告</p>
           </div>
         )}
       </div>

@@ -1,4 +1,4 @@
-import type { RiskLevel, AlertStatus, DispositionType } from '@/types';
+import type { RiskLevel, AlertStatus, DispositionType, AuditActionType, AuditTargetType } from '@/types';
 
 export function formatCurrency(amount: number, currency = 'CNY'): string {
   return new Intl.NumberFormat('zh-CN', {
@@ -73,8 +73,37 @@ export function getStatusConfig(status: AlertStatus) {
     processing: { label: '处理中', color: 'text-status-processing', bgColor: 'bg-status-processing/15' },
     resolved: { label: '已处置', color: 'text-status-resolved', bgColor: 'bg-status-resolved/15' },
     false_positive: { label: '已标记误报', color: 'text-status-false_positive', bgColor: 'bg-status-false_positive/15' },
+    reviewing: { label: '复核中', color: 'text-accent-secondary', bgColor: 'bg-accent-secondary/15' },
+    reviewed: { label: '已复核', color: 'text-risk-low', bgColor: 'bg-risk-low/15' },
   };
   return configs[status];
+}
+
+export function getAuditActionLabel(action: AuditActionType): string {
+  const labels: Record<AuditActionType, string> = {
+    alert_created: '预警创建',
+    assign: '分派处理',
+    verify_call: '电话核实',
+    disposition: '提交处置',
+    mark_false_positive: '标记误报',
+    review: '复核意见',
+    rule_threshold_update: '规则调参',
+    rule_toggle: '规则启停',
+    list_add: '名单新增',
+    list_remove: '名单删除',
+    report_generate: '生成报告',
+  };
+  return labels[action];
+}
+
+export function getAuditTargetLabel(targetType: AuditTargetType): string {
+  const labels: Record<AuditTargetType, string> = {
+    alert: '预警案件',
+    rule: '风控规则',
+    list: '黑白名单',
+    report: '分析报告',
+  };
+  return labels[targetType];
 }
 
 export function getDispositionConfig(type: DispositionType) {

@@ -1,6 +1,6 @@
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
-export type AlertStatus = 'pending' | 'processing' | 'resolved' | 'false_positive';
+export type AlertStatus = 'pending' | 'processing' | 'resolved' | 'false_positive' | 'reviewing' | 'reviewed';
 
 export type DispositionType = 'approve' | 'reject' | 'freeze' | 'escalate';
 
@@ -32,6 +32,7 @@ export interface Alert {
   verifyRecords: VerifyRecord[];
   disposition?: Disposition;
   operationLogs: OperationLog[];
+  reviewRecords: ReviewRecord[];
 }
 
 export interface VerifyRecord {
@@ -116,11 +117,12 @@ export interface BlackWhiteItem {
 
 export interface Report {
   id: string;
-  type: 'daily' | 'weekly';
+  type: 'daily' | 'weekly' | 'custom';
   period: string;
   generatedAt: string;
   summary: ReportSummary;
   topMerchants: { name: string; alertCount: number; riskAmount: number }[];
+  config?: CustomReportConfig;
 }
 
 export interface ReportSummary {
@@ -163,4 +165,57 @@ export interface RegionData {
   region: string;
   count: number;
   amount: number;
+}
+
+export interface ReviewRecord {
+  id: string;
+  reviewer: string;
+  opinion: 'approve' | 'reject' | 'escalate';
+  comment: string;
+  reviewedAt: string;
+  dispositionSnapshot?: Disposition;
+  verifyRecordsSnapshot?: VerifyRecord[];
+  ruleChangesSnapshot?: { ruleId: string; ruleName: string; oldThreshold: number; newThreshold: number }[];
+}
+
+export type AuditActionType =
+  | 'alert_created'
+  | 'assign'
+  | 'verify_call'
+  | 'disposition'
+  | 'mark_false_positive'
+  | 'review'
+  | 'rule_threshold_update'
+  | 'rule_toggle'
+  | 'list_add'
+  | 'list_remove'
+  | 'report_generate';
+
+export type AuditTargetType = 'alert' | 'rule' | 'list' | 'report';
+
+export interface AuditLog {
+  id: string;
+  action: AuditActionType;
+  targetType: AuditTargetType;
+  targetId: string;
+  targetName?: string;
+  detail: string;
+  operator: string;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AuditFilters {
+  operator?: string;
+  action?: AuditActionType[];
+  dateFrom?: string;
+  dateTo?: string;
+  targetType?: AuditTargetType;
+}
+
+export interface CustomReportConfig {
+  dateFrom: string;
+  dateTo: string;
+  riskLevels?: RiskLevel[];
+  regions?: string[];
 }

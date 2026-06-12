@@ -9,6 +9,7 @@ import {
   PanelLeft,
   PanelLeftClose,
   Shield,
+  ClipboardList,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 
@@ -18,6 +19,7 @@ const navItems = [
   { path: '/cases/:id', icon: FileSearch, label: '案件详情', hidden: true },
   { path: '/strategy', icon: Sliders, label: '策略调参' },
   { path: '/reports', icon: FileBarChart, label: '报表中心' },
+  { path: '/audit', icon: ClipboardList, label: '审计中心' },
 ];
 
 export default function Sidebar() {

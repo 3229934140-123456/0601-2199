@@ -16,9 +16,14 @@ import {
   Shield,
   History,
   UserPlus,
+  Eye,
+  ThumbsUp,
+  ThumbsDown,
+  AlertOctagon,
+  Sliders,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import type { VerifyRecord, DispositionType } from '@/types';
+import type { VerifyRecord, DispositionType, ReviewRecord } from '@/types';
 import {
   formatCurrency,
   formatDateTime,
@@ -35,13 +40,18 @@ import Select from '@/components/common/Select';
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getCaseById, assignAlert, addVerifyRecord, setDisposition, currentUser } = useAppStore();
+  const { getCaseById, assignAlert, addVerifyRecord, setDisposition, submitReview, currentUser, auditLogs } = useAppStore();
   const caseData = getCaseById(id || '');
 
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedAssignee, setSelectedAssignee] = useState('');
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showDispositionModal, setShowDispositionModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewForm, setReviewForm] = useState({
+    opinion: 'approve' as ReviewRecord['opinion'],
+    comment: '',
+  });
 
   const [verifyForm, setVerifyForm] = useState({
     contactPerson: '',
@@ -90,6 +100,22 @@ export default function CaseDetail() {
     setDisposition(caseData.id, dispositionForm, currentUser.name);
     setShowDispositionModal(false);
   };
+
+  const handleReview = () => {
+    if (!reviewForm.comment) return;
+    submitReview(caseData.id, reviewForm.opinion, reviewForm.comment, currentUser.name);
+    setShowReviewModal(false);
+    setReviewForm({ opinion: 'approve', comment: '' });
+  };
+
+  const ruleChangesSinceAlert = caseData
+    ? auditLogs.filter(
+        (log) =>
+          log.targetType === 'rule' &&
+          log.action === 'rule_threshold_update' &&
+          new Date(log.createdAt) >= new Date(caseData.createdAt)
+      )
+    : [];
 
   const infoItems = [
     { icon: MapPin, label: '交易地区', value: caseData.region },
@@ -147,10 +173,16 @@ export default function CaseDetail() {
               <Phone className="w-4 h-4" />
               电话核实
             </button>
-            {caseData.status !== 'resolved' && caseData.status !== 'false_positive' && (
+            {caseData.status !== 'resolved' && caseData.status !== 'false_positive' && caseData.status !== 'reviewing' && caseData.status !== 'reviewed' && (
               <button onClick={() => setShowDispositionModal(true)} className="btn-primary flex items-center gap-2">
                 <Shield className="w-4 h-4" />
                 给出处置结论
+              </button>
+            )}
+            {caseData.status === 'reviewing' && (
+              <button onClick={() => setShowReviewModal(true)} className="btn-primary flex items-center gap-2">
+                <Eye className="w-4 h-4" />
+                提交复核意见
               </button>
             )}
           </>
@@ -304,6 +336,151 @@ export default function CaseDetail() {
               </div>
             </div>
           )}
+
+          {ruleChangesSinceAlert.length > 0 && (
+            <div className="card p-5 border-accent-secondary/30">
+              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2 mb-4">
+                <Sliders className="w-4 h-4 text-accent-secondary" />
+                策略变更影响
+                <span className="text-xs font-normal text-text-muted">（案件创建后调整的规则）</span>
+              </h3>
+              <div className="space-y-2">
+                {ruleChangesSinceAlert.map((log) => (
+                  <div key={log.id} className="p-3 rounded-md bg-bg-secondary border border-border-primary">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-text-primary">{log.targetName}</span>
+                      <span className="text-xs text-accent-secondary bg-accent-secondary/10 px-2 py-0.5 rounded">
+                        阈值: {String(log.metadata?.oldThreshold)} → {String(log.metadata?.newThreshold)} {log.metadata?.unit ? String(log.metadata.unit) : ''}
+                      </span>
+                    </div>
+                    <p className="text-xs text-text-secondary">{log.detail}</p>
+                    <div className="flex items-center gap-3 mt-2 text-xs text-text-muted">
+                      <span className="flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        {log.operator}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {formatDateTime(log.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {caseData.reviewRecords && caseData.reviewRecords.length > 0 && (
+            <div className="card p-5 border-risk-low/30">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-risk-low" />
+                  复核记录
+                </h3>
+                <span className="text-xs text-text-muted">共 {caseData.reviewRecords.length} 条</span>
+              </div>
+              <div className="space-y-3">
+                {[...caseData.reviewRecords]
+                  .sort((a, b) => new Date(b.reviewedAt).getTime() - new Date(a.reviewedAt).getTime())
+                  .map((record) => {
+                    const opinionConfig = {
+                      approve: { label: '复核通过', color: 'text-risk-low', bgColor: 'bg-risk-low/10', icon: ThumbsUp },
+                      reject: { label: '复核驳回', color: 'text-risk-critical', bgColor: 'bg-risk-critical/10', icon: ThumbsDown },
+                      escalate: { label: '需进一步核查', color: 'text-risk-medium', bgColor: 'bg-risk-medium/10', icon: AlertOctagon },
+                    }[record.opinion];
+                    const OpinionIcon = opinionConfig.icon;
+                    return (
+                      <div key={record.id} className="p-4 rounded-md bg-bg-secondary border border-border-primary">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg ${opinionConfig.bgColor} flex items-center justify-center`}>
+                            <OpinionIcon className={`w-4 h-4 ${opinionConfig.color}`} />
+                          </div>
+                          <span className={`text-sm font-semibold ${opinionConfig.color}`}>
+                            {opinionConfig.label}
+                          </span>
+                        </div>
+                        <p className="text-sm text-text-secondary leading-relaxed mb-3">{record.comment}</p>
+                        <div className="flex items-center gap-3 text-xs text-text-muted">
+                          <span className="flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            {record.reviewer}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatDateTime(record.reviewedAt)}
+                          </span>
+                        </div>
+                        {record.ruleChangesSnapshot && record.ruleChangesSnapshot.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-border-primary">
+                            <p className="text-xs text-text-muted mb-2">关联策略变更：</p>
+                            <div className="space-y-1">
+                              {record.ruleChangesSnapshot.map((change, idx) => (
+                                <div key={idx} className="text-xs text-text-secondary">
+                                  • {change.ruleName}: {change.oldThreshold} → {change.newThreshold}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-accent-primary" />
+                处置进度
+              </h3>
+            </div>
+            <div className="relative pl-6">
+              <div className="absolute left-[7px] top-1 bottom-1 w-px bg-border-primary" />
+              {[
+                { key: 'create', label: '预警创建', done: true, time: caseData.createdAt, operator: 'SYSTEM' },
+                { key: 'assign', label: '分派处理人', done: !!caseData.assignee, time: caseData.operationLogs.find(l => l.action === '分派处理人' || l.action === '批量分派')?.createdAt, operator: caseData.operationLogs.find(l => l.action === '分派处理人' || l.action === '批量分派')?.operator },
+                { key: 'verify', label: '电话核实', done: caseData.verifyRecords.length > 0, time: caseData.verifyRecords[caseData.verifyRecords.length - 1]?.createdAt, operator: caseData.verifyRecords[caseData.verifyRecords.length - 1]?.operator },
+                { key: 'disposition', label: '提交处置', done: !!caseData.disposition, time: caseData.disposition?.createdAt, operator: caseData.disposition?.operator },
+                { key: 'review', label: '复核完成', done: caseData.status === 'reviewed', time: caseData.reviewRecords?.[caseData.reviewRecords.length - 1]?.reviewedAt, operator: caseData.reviewRecords?.[caseData.reviewRecords.length - 1]?.reviewer },
+              ].map((step, idx) => {
+                const isLatest = step.done && idx === [
+                  'create',
+                  caseData.assignee ? 'assign' : null,
+                  caseData.verifyRecords.length > 0 ? 'verify' : null,
+                  caseData.disposition ? 'disposition' : null,
+                  caseData.status === 'reviewed' ? 'review' : null,
+                ].filter(Boolean).lastIndexOf(step.key);
+                return (
+                  <div key={step.key} className="relative pb-5 last:pb-0">
+                    <div
+                      className={`absolute -left-[22px] top-1 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        step.done
+                          ? isLatest
+                            ? 'border-accent-primary bg-accent-primary/20 animate-pulse'
+                            : 'border-accent-secondary bg-accent-secondary/20'
+                          : 'border-text-muted bg-bg-secondary'
+                      }`}
+                    >
+                      {step.done && <div className={`w-1.5 h-1.5 rounded-full ${isLatest ? 'bg-accent-primary' : 'bg-accent-secondary'}`} />}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-sm font-medium ${step.done ? (isLatest ? 'text-accent-primary' : 'text-text-primary') : 'text-text-muted'}`}>
+                        {step.label}
+                      </span>
+                      {step.time && (
+                        <span className="text-xs text-text-muted">{formatDateTime(step.time)}</span>
+                      )}
+                    </div>
+                    {step.operator && (
+                      <span className="text-xs text-text-muted">操作人: {step.operator}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           <div className="card p-5">
             <div className="flex items-center justify-between mb-4">
@@ -512,6 +689,72 @@ export default function CaseDetail() {
             <div className="flex items-center justify-end gap-2 mt-6">
               <button onClick={() => setShowDispositionModal(false)} className="btn-secondary">取消</button>
               <button onClick={handleDisposition} className="btn-primary">确认处置</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showReviewModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
+          <div className="card w-full max-w-lg p-6 animate-slide-up">
+            <h3 className="text-lg font-semibold text-text-primary mb-4">复核意见</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-text-secondary mb-2">复核结论</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { value: 'approve', label: '通过', icon: ThumbsUp, color: 'text-risk-low' },
+                    { value: 'reject', label: '驳回', icon: ThumbsDown, color: 'text-risk-critical' },
+                    { value: 'escalate', label: '升级', icon: AlertOctagon, color: 'text-risk-medium' },
+                  ] as const).map((opt) => {
+                    const Icon = opt.icon;
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => setReviewForm({ ...reviewForm, opinion: opt.value })}
+                        className={`p-3 rounded-md border text-sm font-medium transition-colors flex flex-col items-center gap-1 ${
+                          reviewForm.opinion === opt.value
+                            ? `border-current ${opt.color} bg-current/10`
+                            : 'border-border-primary text-text-secondary hover:border-accent-primary/50 hover:text-text-primary'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-text-secondary mb-1.5">复核说明 *</label>
+                <textarea
+                  value={reviewForm.comment}
+                  onChange={e => setReviewForm({ ...reviewForm, comment: e.target.value })}
+                  rows={4}
+                  className="input-base resize-none"
+                  placeholder="请详细说明复核意见和依据..."
+                />
+              </div>
+              {caseData && (
+                <div className="p-3 rounded-md bg-bg-secondary border border-border-primary">
+                  <p className="text-xs text-text-muted mb-2">当前处置信息：</p>
+                  {caseData.disposition && (
+                    <div className="text-sm text-text-secondary">
+                      <span className={`font-medium ${getDispositionConfig(caseData.disposition.type).color}`}>
+                        {getDispositionConfig(caseData.disposition.type).label}
+                      </span>
+                      <span className="text-text-muted"> - {caseData.disposition.remark.slice(0, 50)}...</span>
+                    </div>
+                  )}
+                  <div className="text-xs text-text-muted mt-1">
+                    电话核实: {caseData.verifyRecords.length} 次 | 处理人: {caseData.assignee || '未分派'}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-6">
+              <button onClick={() => setShowReviewModal(false)} className="btn-secondary">取消</button>
+              <button onClick={handleReview} className="btn-primary">提交复核</button>
             </div>
           </div>
         </div>

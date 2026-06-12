@@ -40,6 +40,8 @@ const statusOptions: { value: AlertStatus; label: string }[] = [
   { value: 'processing', label: '处理中' },
   { value: 'resolved', label: '已处置' },
   { value: 'false_positive', label: '已标记误报' },
+  { value: 'reviewing', label: '复核中' },
+  { value: 'reviewed', label: '已复核' },
 ];
 
 const regionOptions = [
