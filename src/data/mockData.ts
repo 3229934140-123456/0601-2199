@@ -93,6 +93,16 @@ function generateAlerts(): Alert[] {
       ip: `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
       cardNo: `6222****${Math.floor(1000 + Math.random() * 9000)}`,
       deviceInfo: `DEV-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+      verifyRecords: [],
+      operationLogs: [
+        {
+          id: `op_${i}_001`,
+          action: '预警创建',
+          detail: `命中 ${hitRules.length} 条风控规则触发系统自动预警`,
+          operator: 'SYSTEM',
+          createdAt: createdAt.toISOString(),
+        },
+      ],
     });
   }
 

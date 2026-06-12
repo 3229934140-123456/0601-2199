@@ -49,7 +49,7 @@ export default function Strategy() {
 
   const handleSaveThreshold = (ruleId: string) => {
     if (tempThresholds[ruleId] !== undefined) {
-      updateRuleThreshold(ruleId, tempThresholds[ruleId]);
+      updateRuleThreshold(ruleId, tempThresholds[ruleId], currentUser.name);
     }
     setEditingRule(null);
   };
@@ -78,7 +78,7 @@ export default function Strategy() {
 
   const handleAddItem = () => {
     if (!newItem.value || !newItem.reason) return;
-    addListItem({ ...newItem, operator: currentUser.name });
+    addListItem(newItem, currentUser.name);
     setNewItem({ type: 'black', category: 'merchant', value: '', reason: '' });
     setShowAddModal(false);
   };
@@ -159,7 +159,7 @@ export default function Strategy() {
                     <p className="text-sm text-text-secondary mt-1">{rule.description}</p>
                   </div>
                   <button
-                    onClick={() => toggleRuleEnabled(rule.id)}
+                    onClick={() => toggleRuleEnabled(rule.id, currentUser.name)}
                     className="text-text-muted hover:text-accent-primary transition-colors"
                   >
                     {rule.enabled ? <ToggleRight className="w-8 h-8 text-risk-low" /> : <ToggleLeft className="w-8 h-8" />}
@@ -358,7 +358,7 @@ export default function Strategy() {
                       </td>
                       <td className="px-5 py-3">
                         <button
-                          onClick={() => removeListItem(item.id)}
+                          onClick={() => removeListItem(item.id, currentUser.name)}
                           className="p-1.5 rounded hover:bg-risk-critical/10 text-text-muted hover:text-risk-critical transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />

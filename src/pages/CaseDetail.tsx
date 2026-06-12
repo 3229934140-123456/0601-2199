@@ -73,26 +73,21 @@ export default function CaseDetail() {
 
   const handleAssign = () => {
     if (!selectedAssignee) return;
-    assignAlert(caseData.id, selectedAssignee);
+    assignAlert(caseData.id, selectedAssignee, currentUser.name);
     setShowAssignModal(false);
+    setSelectedAssignee('');
   };
 
   const handleVerify = () => {
     if (!verifyForm.contactPerson || !verifyForm.phone) return;
-    addVerifyRecord(caseData.id, {
-      ...verifyForm,
-      operator: currentUser.name,
-    });
+    addVerifyRecord(caseData.id, verifyForm, currentUser.name);
     setShowVerifyModal(false);
     setVerifyForm({ contactPerson: '', phone: '', content: '', result: 'confirmed' });
   };
 
   const handleDisposition = () => {
     if (!dispositionForm.remark) return;
-    setDisposition(caseData.id, {
-      ...dispositionForm,
-      operator: currentUser.name,
-    });
+    setDisposition(caseData.id, dispositionForm, currentUser.name);
     setShowDispositionModal(false);
   };
 
@@ -311,27 +306,51 @@ export default function CaseDetail() {
           )}
 
           <div className="card p-5">
-            <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2 mb-4">
-              <History className="w-4 h-4 text-accent-primary" />
-              操作留痕
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                <History className="w-4 h-4 text-accent-primary" />
+                操作留痕
+              </h3>
+              <span className="text-xs text-text-muted">
+                共 {caseData.operationLogs.length} 条记录
+              </span>
+            </div>
             <div className="relative pl-6">
               <div className="absolute left-[7px] top-1 bottom-1 w-px bg-border-primary" />
-              {caseData.operationLogs.map((log, idx) => (
-                <div key={log.id} className="relative pb-5 last:pb-0">
-                  <div className={`absolute -left-[22px] top-1 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                    idx === 0 ? 'border-accent-primary bg-accent-primary/20' : 'border-border-secondary bg-bg-secondary'
-                  }`}>
-                    {idx === 0 && <div className="w-1.5 h-1.5 rounded-full bg-accent-primary" />}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-text-primary font-medium">{log.action}</span>
-                    <span className="text-xs text-text-muted">{formatDateTime(log.createdAt)}</span>
-                  </div>
-                  <p className="text-xs text-text-secondary mt-0.5">{log.detail}</p>
-                  <span className="text-xs text-text-muted">操作人: {log.operator}</span>
-                </div>
-              ))}
+              {[...caseData.operationLogs]
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .map((log, idx) => {
+                  const isLatest = idx === 0;
+                  const isSystem = log.operator === 'SYSTEM';
+                  return (
+                    <div key={log.id} className="relative pb-5 last:pb-0">
+                      <div
+                        className={`absolute -left-[22px] top-1 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          isLatest
+                            ? 'border-accent-primary bg-accent-primary/20 animate-pulse'
+                            : isSystem
+                            ? 'border-text-muted bg-bg-secondary'
+                            : 'border-accent-secondary bg-bg-secondary'
+                        }`}
+                      >
+                        {isLatest && <div className="w-1.5 h-1.5 rounded-full bg-accent-primary" />}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-sm font-medium ${isLatest ? 'text-accent-primary' : 'text-text-primary'}`}>
+                          {log.action}
+                        </span>
+                        <span className="text-xs text-text-muted">{formatDateTime(log.createdAt)}</span>
+                      </div>
+                      <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{log.detail}</p>
+                      <span className="text-xs text-text-muted">
+                        操作人:{' '}
+                        <span className={isSystem ? 'text-text-muted' : 'text-text-secondary'}>
+                          {log.operator}
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </div>

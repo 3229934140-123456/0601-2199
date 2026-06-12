@@ -11,11 +11,13 @@ import {
   DollarSign,
   Clock,
   X,
+  Loader2,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { useAppStore } from '@/store/useAppStore';
 import type { Report, RiskLevel } from '@/types';
 import { formatCurrency, formatNumber, formatDate, formatDateTime, getRiskLevelConfig } from '@/utils/formatters';
+import { exportReportToPDF, exportReportToExcel } from '@/utils/export';
 import PageHeader from '@/components/common/PageHeader';
 
 const COLORS: Record<RiskLevel, string> = {
@@ -36,11 +38,24 @@ export default function Reports() {
   const { reports } = useAppStore();
   const [reportFilter, setReportFilter] = useState<'all' | 'daily' | 'weekly'>('all');
   const [previewReport, setPreviewReport] = useState<Report | null>(null);
+  const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
 
   const filteredReports = reportFilter === 'all' ? reports : reports.filter(r => r.type === reportFilter);
 
-  const handleExport = (report: Report, format: 'pdf' | 'excel') => {
-    alert(`正在导出 ${report.period} ${report.type === 'daily' ? '日' : '周'}报 (${format.toUpperCase()})...`);
+  const handleExport = async (report: Report, format: 'pdf' | 'excel') => {
+    setExporting(format);
+    try {
+      if (format === 'pdf') {
+        await exportReportToPDF(report, 'report-content');
+      } else {
+        exportReportToExcel(report);
+      }
+    } catch (error) {
+      console.error('导出失败:', error);
+      alert('导出失败，请重试');
+    } finally {
+      setExporting(null);
+    }
   };
 
   if (previewReport) {
@@ -68,18 +83,26 @@ export default function Reports() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => handleExport(previewReport, 'pdf')} className="btn-secondary flex items-center gap-2">
-              <Download className="w-4 h-4" />
-              导出 PDF
+            <button
+              onClick={() => handleExport(previewReport, 'pdf')}
+              disabled={exporting !== null}
+              className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+            >
+              {exporting === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {exporting === 'pdf' ? '导出中...' : '导出 PDF'}
             </button>
-            <button onClick={() => handleExport(previewReport, 'excel')} className="btn-primary flex items-center gap-2">
-              <Download className="w-4 h-4" />
-              导出 Excel
+            <button
+              onClick={() => handleExport(previewReport, 'excel')}
+              disabled={exporting !== null}
+              className="btn-primary flex items-center gap-2 disabled:opacity-50"
+            >
+              {exporting === 'excel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {exporting === 'excel' ? '导出中...' : '导出 Excel'}
             </button>
           </div>
         </div>
 
-        <div className="card p-8 mb-4">
+        <div id="report-content" className="card p-8 mb-4">
           <div className="text-center border-b border-border-primary pb-6 mb-6">
             <h2 className="text-2xl font-bold text-text-primary mb-2">
               支付机构风险控制{previewReport.type === 'daily' ? '日' : '周'}报告

@@ -29,6 +29,9 @@ export interface Alert {
   ip?: string;
   cardNo?: string;
   deviceInfo?: string;
+  verifyRecords: VerifyRecord[];
+  disposition?: Disposition;
+  operationLogs: OperationLog[];
 }
 
 export interface VerifyRecord {
@@ -57,10 +60,31 @@ export interface OperationLog {
 }
 
 export interface CaseDetail extends Alert {
-  verifyRecords: VerifyRecord[];
-  disposition?: Disposition;
-  operationLogs: OperationLog[];
   relatedAlerts: Alert[];
+}
+
+export type OperationAction =
+  | 'alert_created'
+  | 'assign'
+  | 'verify_call'
+  | 'disposition'
+  | 'mark_false_positive'
+  | 'rule_threshold_update'
+  | 'rule_toggle'
+  | 'list_add'
+  | 'list_remove'
+  | 'note_add';
+
+export interface SystemOperationLog {
+  id: string;
+  action: OperationAction;
+  targetType: 'alert' | 'rule' | 'list';
+  targetId: string;
+  targetName?: string;
+  detail: string;
+  operator: string;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface RiskRule {

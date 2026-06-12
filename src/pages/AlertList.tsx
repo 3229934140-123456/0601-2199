@@ -11,6 +11,7 @@ import {
   CheckSquare,
   Eye,
   Layers,
+  X,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Alert, RiskLevel, AlertStatus } from '@/types';
@@ -22,6 +23,7 @@ import {
   getRiskScoreBarColor,
   truncateText,
 } from '@/utils/formatters';
+import { operators } from '@/data/mockData';
 import PageHeader from '@/components/common/PageHeader';
 import Select from '@/components/common/Select';
 import RiskScoreBadge from '@/components/common/RiskScoreBadge';
@@ -52,11 +54,13 @@ const regionOptions = [
 
 export default function AlertList() {
   const navigate = useNavigate();
-  const { getFilteredAlerts, getGroupedAlerts, setFilters, resetFilters, filters, markFalsePositive } = useAppStore();
+  const { getFilteredAlerts, getGroupedAlerts, setFilters, resetFilters, filters, markFalsePositive, batchAssignAlerts, currentUser } = useAppStore();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showGrouped, setShowGrouped] = useState(true);
   const [showFilters, setShowFilters] = useState(true);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedAssignee, setSelectedAssignee] = useState('');
 
   const alerts = getFilteredAlerts();
   const groupedAlerts = getGroupedAlerts();
@@ -98,8 +102,16 @@ export default function AlertList() {
 
   const handleBatchFalsePositive = () => {
     if (selectedIds.size === 0) return;
-    markFalsePositive(Array.from(selectedIds));
+    markFalsePositive(Array.from(selectedIds), currentUser.name, '批量标记为误报');
     setSelectedIds(new Set());
+  };
+
+  const handleBatchAssign = () => {
+    if (selectedIds.size === 0 || !selectedAssignee) return;
+    batchAssignAlerts(Array.from(selectedIds), selectedAssignee, currentUser.name);
+    setSelectedIds(new Set());
+    setSelectedAssignee('');
+    setShowAssignModal(false);
   };
 
   const AlertRow = ({ alert, isNested = false }: { alert: Alert; isNested?: boolean }) => {
@@ -346,7 +358,7 @@ export default function AlertList() {
             已选择 <span className="font-mono font-bold text-accent-primary">{selectedIds.size}</span> 条预警
           </div>
           <div className="flex items-center gap-2">
-            <button className="btn-secondary text-xs flex items-center gap-1.5">
+            <button onClick={() => setShowAssignModal(true)} className="btn-secondary text-xs flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5" />
               批量分派
             </button>
@@ -473,6 +485,46 @@ export default function AlertList() {
           </div>
         </div>
       </div>
+
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
+          <div className="card w-full max-w-md p-6 animate-slide-up">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-text-primary">批量分派处理人</h3>
+              <button
+                onClick={() => setShowAssignModal(false)}
+                className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mb-2 text-sm text-text-secondary">
+              已选中 <span className="font-mono font-bold text-accent-primary">{selectedIds.size}</span> 条预警
+            </div>
+            <div className="mb-6">
+              <label className="block text-sm text-text-secondary mb-2">选择处理人</label>
+              <Select
+                value={selectedAssignee}
+                options={operators.map(o => ({ value: o, label: o }))}
+                onChange={setSelectedAssignee}
+                placeholder="请选择处理人"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={() => setShowAssignModal(false)} className="btn-secondary">
+                取消
+              </button>
+              <button
+                onClick={handleBatchAssign}
+                disabled={!selectedAssignee}
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                确认分派
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
