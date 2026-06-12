@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #E6F1FF;
+  background-color: #0B1929;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0F2137;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2A4A6F;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3A5A7F;
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-accent-primary text-bg-primary font-medium rounded-md transition-all duration-200 hover:bg-accent-primary/90 hover:shadow-glow active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-bg-tertiary text-text-primary border border-border-primary rounded-md transition-all duration-200 hover:bg-bg-hover hover:border-accent-primary/50;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 bg-risk-critical/90 text-white font-medium rounded-md transition-all duration-200 hover:bg-risk-critical;
+  }
+
+  .card {
+    @apply bg-bg-card border border-border-primary rounded-lg shadow-card;
+  }
+
+  .input-base {
+    @apply w-full px-3 py-2 bg-bg-secondary border border-border-primary rounded-md text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 transition-colors;
+  }
+
+  .tag {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+  }
+}
